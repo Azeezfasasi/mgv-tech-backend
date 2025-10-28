@@ -22,7 +22,8 @@ app.use(cors({
   origin: [
     'https://itservicepro.netlify.app',
     'https://mgv-tech.com',
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'https://embed.tawk.to/684c67ffc2de78190f317340/1itl7cfob',
   ], // your frontend URL
   credentials: true, // if you use cookies/auth
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
