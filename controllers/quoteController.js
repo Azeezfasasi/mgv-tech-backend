@@ -1,21 +1,15 @@
 const QuoteRequest = require('../models/QuoteRequest');
 const User = require('../models/User');
-const nodemailer = require('nodemailer'); // Re-added nodemailer import
+const {
+  sendQuoteRequestEmail,
+  sendEmailToAdmins,
+  sendEmail
+} = require('../utils/brevoEmailService');
 require('dotenv').config();
-
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: Number(process.env.EMAIL_PORT), // Ensure port is a number
-    secure: process.env.EMAIL_SECURE === 'true', // Ensure secure is a boolean
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
 
 // Helper to get admin emails from .env (comma-separated)
 function getAdminEmails() {
-  const emails = process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || '';
+  const emails = process.env.ADMIN_EMAILS || '';
   return emails.split(',').map(e => e.trim()).filter(Boolean);
 }
 
@@ -30,102 +24,29 @@ exports.sendQuoteRequest = async (req, res) => {
     const quote = new QuoteRequest({ name, email, phone, service, message });
     await quote.save();
 
-    // Send email to admins
-    const adminEmails = getAdminEmails();
-    await transporter.sendMail({
-      from: `"${quote.name}" <${quote.email}>`,
-      to: adminEmails[0] || process.env.RECEIVER_EMAIL,
-      cc: adminEmails.length > 1 ? adminEmails.slice(1) : undefined,
-      subject: `Quote Request from ${quote.name} on Marshall Global Ventures`,
-      html: `
-      <div style="max-width:580px;margin:auto;border-radius:8px;border:1px solid #e0e0e0;background:#fff;overflow:hidden;font-family:'Inter',sans-serif;">
-
-        // Header section
-        <div style="background:#00B9F1;padding:24px 0;text-align:center;">
-            <h1 style="color:#fff;margin:0;font-size:2.2rem;font-weight:700;line-height:1.2;">Marshall Global Ventures!</h1>
-        </div>
-
-        <!-- Body Section -->
-        <div style="padding:32px 24px 24px 24px;">
-          <p><strong>Hello Admin,</strong></p>
-          <p>A new quote request has just been submitted through the Marshall Global Ventures website. Please review the details below:</p>
-          <p><strong>Service Requested:</strong> ${quote.service}</p>
-          <p><strong>Message:</strong> ${quote.message}</p>
-          <p><strong>From:</strong> ${quote.name} (${quote.email}) (${quote.phone})</p>
-          <br />
-          <p>Please <a href="https://mgv-tech.com/login">log in</a> to your admin dashboard to follow up or assign this request to a team member.</p>
-        </div>
-
-        <!-- Footer Section -->
-        <div style="background:#f0f0f0;padding:24px;text-align:center;color:#666;font-size:0.85rem;line-height:1.6;border-top:1px solid #e5e5e5;">
-          <p style="margin:0 0 8px 0;">&copy; 2025 Marshall Global Ventures. All rights reserved.</p>
-          <p style="margin:0 0 8px 0;">
-            123 Ikorodu Road, Lagos, Nigeria
-          </p>
-          <p style="margin:0 0 16px 0;">
-              Email: <a href="mailto:info@mgv-tech.com" style="color:#00B9F1;text-decoration:none;">info@mgv-tech.com</a> | Phone: <a href="tel:+2348103069432" style="color:#00B9F1;text-decoration:none;">(+234) 08103069432</a>
-          </p>
-          <div style="margin-top:10px;">
-              <a href="https://linkedin.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">LinkedIn</a> |
-              <a href="https://instagram.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">Instagram</a> |
-              <a href="https://tiktok.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">TikTok</a> |
-              <a href="https://facebook.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">Facebook</a>
-          </div>
-        </div>
-      </div>
-      `
+    // Send emails using Brevo
+    const emailResult = await sendQuoteRequestEmail({
+      name,
+      email,
+      phone,
+      service,
+      message
     });
 
-    // Send confirmation email to customer
-    await transporter.sendMail({
-      to: quote.email,
-      from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`, 
-      subject: `We Received Your Quote Request on Marshall Global Ventures | ${quote.service}`,
-      html: `
-      <div style="max-width:580px;margin:auto;border-radius:8px;border:1px solid #e0e0e0;background:#fff;overflow:hidden;font-family:'Inter',sans-serif;">
-
-        // Header section
-        <div style="background:#00B9F1;padding:24px 0;text-align:center;">
-            <h1 style="color:#fff;margin:0;font-size:2.2rem;font-weight:700;line-height:1.2;">Marshall Global Ventures!</h1>
-        </div>
-
-        <!-- Body Section -->
-        <div style="padding:32px 24px 24px 24px;">
-          <h2>Thank you for submitting a quote request through the IT Marshall Global Ventures website!</h2>
-          <p>Dear ${quote.name},</p>
-          <p>We have received your request for <strong>${quote.service}</strong> and we are currently reviewing the details of your request to ensure we provide the most accurate and tailored response.</p>
-          <p>One of our IT experts will contact you shortly to discuss your requirements and the best solutions available. We appreciate your interest and trust in Marshall Global Ventures.</p>
-          <p>If you have any additional information you would like to share in the meantime, please feel free to reply to this email.</p>
-          <p><strong>Your message:</strong> ${quote.message}</p>
-          <p>Kind regards,
-          <br/>
-          <strong>Marshall Global Ventures Team</strong>,</p>
-          <br/><br/>
-          <p><em>If you did not request a quote, please ignore this email.</em></p>
-        </div>
-
-        <!-- Footer Section -->
-        <div style="background:#f0f0f0;padding:24px;text-align:center;color:#666;font-size:0.85rem;line-height:1.6;border-top:1px solid #e5e5e5;">
-          <p style="margin:0 0 8px 0;">&copy; 2025 Marshall Global Ventures. All rights reserved.</p>
-          <p style="margin:0 0 8px 0;">
-            123 Ikorodu Road, Lagos, Nigeria
-          </p>
-          <p style="margin:0 0 16px 0;">
-            Email: <a href="mailto:info@mgv-tech.com" style="color:#00B9F1;text-decoration:none;">info@mgv-tech.com</a> | Phone: <a href="tel:+2348103069432" style="color:#00B9F1;text-decoration:none;">(+234) 08103069432</a>
-          </p>
-          <div style="margin-top:10px;">
-            <a href="https://linkedin.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">LinkedIn</a> |
-            <a href="https://instagram.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">Instagram</a> |
-            <a href="https://tiktok.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">TikTok</a> |
-            <a href="https://facebook.com" style="color:#00B9F1;text-decoration:none;margin:0 8px;">Facebook</a>
-          </div>
-        </div>
-      </div>
-      `
-    });
-
-    res.status(200).json({ message: 'Quote request sent and saved successfully!' });
+    if (emailResult.success) {
+      res.status(200).json({ 
+        message: 'Quote request sent and saved successfully!',
+        emailsSent: emailResult
+      });
+    } else {
+      res.status(201).json({ 
+        message: 'Quote request saved but email delivery had issues',
+        quote: quote._id,
+        emailError: emailResult
+      });
+    }
   } catch (err) {
+    console.error('Error in sendQuoteRequest:', err);
     res.status(500).json({ error: 'Failed to process request.', details: err.message });
   }
 };
@@ -289,17 +210,15 @@ exports.assignQuoteToAdmin = async (req, res) => {
 
     try {
       // Email to the assigned admin
-      await transporter.sendMail({
+      await sendEmail({
         to: populatedQuote.assignedTo.email,
-        from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
         subject: `New Quote Request Assigned to You: ${populatedQuote.service}`,
         html: adminNotificationHtml,
       });
 
       // Email to the customer
-      await transporter.sendMail({
-        to: populatedQuote.email, // Customer's email
-        from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
+      await sendEmail({
+        to: populatedQuote.email,
         subject: `Your Quote Request is Being Processed | ${populatedQuote.service}`,
         html: customerNotificationHtml,
       });
@@ -573,9 +492,8 @@ exports.adminReplyToQuoteRequest = async (req, res) => {
     }
 
     // Send email to customer
-    await transporter.sendMail({
+    await sendEmail({
       to: updatedAndPopulatedQuote.email,
-      from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
       subject: `Reply to your Quote Request for ${updatedAndPopulatedQuote.service} from Marshall Global Ventures`,
       html: customerEmailHtml
     });
@@ -583,11 +501,10 @@ exports.adminReplyToQuoteRequest = async (req, res) => {
 
     // Send confirmation email to the assigned admin
     if (updatedAndPopulatedQuote.assignedTo && updatedAndPopulatedQuote.assignedTo.email) {
-      await transporter.sendMail({
+      await sendEmail({
         to: updatedAndPopulatedQuote.assignedTo.email,
-        from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
         subject: `Confirmation: Your Reply to Quote ${updatedAndPopulatedQuote.service} Sent`,
-        html: adminReplyConfirmationHtml,
+        html: adminReplyConfirmationHtml
       });
       console.log(`Reply confirmation email sent to assigned admin ${updatedAndPopulatedQuote.assignedTo.email}.`);
     } else {
@@ -728,25 +645,15 @@ exports.customerReplyToQuote = async (req, res) => {
     `;
 
     // Send email notification to admins about the customer's reply
-    const adminEmails = await getAdminEmails(); // Ensure getAdminEmails is awaited
-    if (adminEmails.length > 0) {
-      await transporter.sendMail({
-        to: adminEmails[0],
-        cc: adminEmails.length > 1 ? adminEmails.slice(1) : undefined,
-        from: `"${updatedAndPopulatedQuote.name || updatedAndPopulatedQuote.email}" <${updatedAndPopulatedQuote.email}>`, // Use customer's name/email as 'from' for easier replies
-        subject: `Customer Reply to Quote Request #${updatedAndPopulatedQuote._id} from ${updatedAndPopulatedQuote.name || updatedAndPopulatedQuote.email}`,
-        html: adminNotificationHtml
-      });
-      console.log(`Customer reply notification email sent to admins: ${adminEmails.join(', ')}`);
-    } else {
-      console.warn('No admin emails found to send customer reply notification.');
-    }
-
+    await sendEmailToAdmins(
+      `Customer Reply to Quote Request #${updatedAndPopulatedQuote._id} from ${updatedAndPopulatedQuote.name || updatedAndPopulatedQuote.email}`,
+      adminNotificationHtml
+    );
+    console.log(`Customer reply notification email sent to admins`);
 
     // Send confirmation to the customer that their reply was received
-    await transporter.sendMail({
+    await sendEmail({
       to: customerEmail,
-      from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
       subject: `Your Reply to Quote Request for ${updatedAndPopulatedQuote.service} Has Been Sent`,
       html: customerConfirmationHtml
     });
