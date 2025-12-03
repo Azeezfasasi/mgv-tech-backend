@@ -11,11 +11,9 @@ const apiKey = process.env.BREVO_API_KEY;
 // Check if API key is valid (not the placeholder)
 if (apiKey && apiKey !== 'your_brevo_api_key_here' && apiKey.startsWith('xkeysib-')) {
   try {
-    // For Brevo v3.0.1+, use Configuration object to set the API key
-    const configuration = new brevo.Configuration({
-      apiKey: apiKey
-    });
-    apiInstance = new brevo.TransactionalEmailsApi(configuration);
+    // For Brevo v3.0.1+, create API instance and set API key directly on authentications
+    apiInstance = new brevo.TransactionalEmailsApi();
+    apiInstance.authentications.apiKey.apiKey = apiKey;
     isBrevoConfigured = true;
     console.log('✅ Brevo email service configured successfully');
   } catch (error) {
