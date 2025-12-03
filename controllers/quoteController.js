@@ -362,9 +362,8 @@ exports.updateQuoteRequest = async (req, res) => {
         </div>
       `;
 
-      await transporter.sendMail({
+      await sendEmail({
         to: updated.email,
-        from: `"Marshall Global Ventures" <${process.env.EMAIL_USER}>`,
         subject: `Your Quote Request Update - ${updated.service} | Marshall Global Ventures`,
         html: customerQuoteUpdateHtml
       });
